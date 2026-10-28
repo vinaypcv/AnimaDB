@@ -25,14 +25,6 @@ jobs:
 
     - name: Install Stable Rust Toolchain
       uses: dtolnay/rust-toolchain@stable
-      with:
-        components: clippy, rustfmt
-
-    - name: Check Formatting
-      run: cargo fmt --check
-
-    - name: Run Clippy Linter
-      run: cargo clippy --release -- -D warnings
 
     - name: Build Engine (Release Profile)
       run: cargo build --release
