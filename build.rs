@@ -9,6 +9,7 @@ fn main() {
         .file("cpp/engine_network.cpp")
         .flag("-std=c++20")
         .flag("-O3")
+        .flag("-march=native")
         .compile("engine");
 
     println!("cargo:rustc-link-lib=static=engine");

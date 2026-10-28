@@ -2,11 +2,12 @@
 #include <atomic>
 #include <vector>
 #include <algorithm>
+#include <cstring>
 
 class AtomicMemoryFabric {
 private:
-    static constexpr size_t BUFFER_SIZE = 4096;
-    std::vector<NetworkFrame> ring_buffer;
+    static constexpr size_t BUFFER_SIZE = 8192;
+    alignas(64) std::vector<NetworkFrame> ring_buffer;
     alignas(64) std::atomic<size_t> write_index{0};
     alignas(64) std::atomic<size_t> read_index{0};
 
@@ -20,15 +21,18 @@ public:
         size_t next_write = (current_write + 1) % BUFFER_SIZE;
 
         if (next_write == read_index.load(std::memory_order_acquire)) {
-            return false;
+            return false; // Backpressure: Ring buffer saturated
         }
 
         NetworkFrame& frame = ring_buffer[current_write];
         frame.agent_id = agent;
         frame.payload_len = std::min(len, 256U);
         
-        std::copy(vec_ptr, vec_ptr + 128, frame.vector_manifold.begin());
-        std::copy(op, op + frame.payload_len, frame.raw_op_code.begin());
+        std::memcpy(frame.vector_manifold, vec_ptr, 128 * sizeof(float));
+        std::memcpy(frame.raw_op_code, op, frame.payload_len);
+        if (frame.payload_len < 256) {
+            frame.raw_op_code[frame.payload_len] = '\0';
+        }
 
         write_index.store(next_write, std::memory_order_release);
         return true;

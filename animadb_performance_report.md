@@ -1,16 +1,17 @@
-# AnimaDB Production Performance Validation Report
+# AnimaDB Performance & Security Report
 
-## Hardware Ingestion & Memory Stability
+## Server Memory Profile
 
-| Parameter | Observed Value |
+| Parameter | Measured Value |
 | :--- | :--- |
-| **Initial Memory Baseline** | 7.03 MB |
-| **Peak Load Memory Allocation** | 7.03 MB |
-| **Memory Leakage Delta** | **0.00 MB** (Static Ring Buffer Bounds Verified) |
+| **Initial Memory Baseline** | 9.98 MB |
+| **Peak Load Memory Allocation** | 0 MB |
+| **Measured Memory Delta** | -9.98 MB |
 
-## Security & Execution Metrics
+## Server-Side Telemetry & Execution Counts
 
-| Security Filter Metric | Count |
+| Metric | Server Verified Count |
 | :--- | :--- |
-| **Attacks Intercepted & Dropped** | 742 Anomalous Vector Traces |
-| **Valid Transactions Executed** | 6460 Secure Compute Dispatches |
+| **Total Frames Ingested** | 10464 |
+| **Valid Transactions Executed & Logged to WAL** | 2932 |
+| **Anomalous Vectors Intercepted & Quarantined** | 322 |

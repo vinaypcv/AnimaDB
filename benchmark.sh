@@ -10,16 +10,20 @@ echo "==========================================================="
 
 cleanup() {
     if [ -n "$SERVER_PID" ]; then
-        echo "[*] Cleaning up database server process ($SERVER_PID)..."
+        echo "[*] Cleaning up server process ($SERVER_PID)..."
         kill -9 "$SERVER_PID" 2>/dev/null || true
     fi
+    rm -f animadb_store.wal animadb_test.wal
 }
 trap cleanup EXIT
 
-echo "[1/4] Compiling AnimaDB Release Target..."
+echo "[1/5] Running Rust Cargo Unit Tests..."
+cargo test --release
+
+echo "[2/5] Compiling AnimaDB Release Target..."
 cargo build --release
 
-echo "[2/4] Starting Engine Server in Background..."
+echo "[3/5] Starting Engine Server..."
 ./target/release/animadb > server_output.log 2>&1 &
 SERVER_PID=$!
 sleep 2
@@ -30,37 +34,43 @@ if ! kill -0 "$SERVER_PID" 2>/dev/null; then
     exit 1
 fi
 
-INITIAL_MEM=$(ps -p "$SERVER_PID" -o rss= | tr -d ' ')
-INITIAL_MEM_MB=$(echo "scale=2; $INITIAL_MEM / 1024" | bc)
+INITIAL_RSS=$(ps -p "$SERVER_PID" -o rss= 2>/dev/null | tr -d ' ' || echo "0")
+INITIAL_RSS=${INITIAL_RSS:-0}
+INITIAL_MEM_MB=$(echo "scale=2; $INITIAL_RSS / 1024" | bc)
 
-echo "[3/4] Running Scale Load Test..."
+echo "[4/5] Executing Multiprocessing Scale Traffic Test..."
 python3 scale_test.py > client_output.log 2>&1
 
-PEAK_MEM=$(ps -p "$SERVER_PID" -o rss= | tr -d ' ')
-PEAK_MEM_MB=$(echo "scale=2; $PEAK_MEM / 1024" | bc)
+sleep 2
+PEAK_RSS=$(ps -p "$SERVER_PID" -o rss= 2>/dev/null | tr -d ' ' || echo "0")
+PEAK_RSS=${PEAK_RSS:-0}
+PEAK_MEM_MB=$(echo "scale=2; $PEAK_RSS / 1024" | bc)
+MEM_DELTA_MB=$(echo "scale=2; $PEAK_MEM_MB - $INITIAL_MEM_MB" | bc)
 
-echo "[4/4] Generating Benchmark Report..."
+echo "[5/5] Extracting Server Telemetry & Compiling Report..."
 
-DROPPED_ATTACKS=$(grep -c "MALICIOUS ATTACK ISOLATED" server_output.log || echo "0")
-TOTAL_INGESTED=$(grep -c "ZK-WASM Enclave" server_output.log || echo "0")
+INGESTED=$(grep "TELEMETRY" server_output.log 2>/dev/null | tail -n 1 | awk -F'Ingested: ' '{print $2}' | awk '{print $1}')
+ACCEPTED=$(grep "TELEMETRY" server_output.log 2>/dev/null | tail -n 1 | awk -F'Accepted: ' '{print $2}' | awk '{print $1}')
+DROPPED=$(grep "TELEMETRY" server_output.log 2>/dev/null | tail -n 1 | awk -F'Dropped: ' '{print $2}' | awk '{print $1}')
 
 cat << REPORT > "$REPORT_FILE"
-# AnimaDB Production Performance Validation Report
+# AnimaDB Performance & Security Report
 
-## Hardware Ingestion & Memory Stability
+## Server Memory Profile
 
-| Parameter | Observed Value |
+| Parameter | Measured Value |
 | :--- | :--- |
 | **Initial Memory Baseline** | ${INITIAL_MEM_MB} MB |
 | **Peak Load Memory Allocation** | ${PEAK_MEM_MB} MB |
-| **Memory Leakage Delta** | **0.00 MB** (Static Ring Buffer Bounds Verified) |
+| **Measured Memory Delta** | ${MEM_DELTA_MB} MB |
 
-## Security & Execution Metrics
+## Server-Side Telemetry & Execution Counts
 
-| Security Filter Metric | Count |
+| Metric | Server Verified Count |
 | :--- | :--- |
-| **Attacks Intercepted & Dropped** | ${DROPPED_ATTACKS} Anomalous Vector Traces |
-| **Valid Transactions Executed** | ${TOTAL_INGESTED} Secure Compute Dispatches |
+| **Total Frames Ingested** | ${INGESTED:-0} |
+| **Valid Transactions Executed & Logged to WAL** | ${ACCEPTED:-0} |
+| **Anomalous Vectors Intercepted & Quarantined** | ${DROPPED:-0} |
 REPORT
 
 echo "[+] Report generated successfully: $REPORT_FILE"
