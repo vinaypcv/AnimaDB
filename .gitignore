@@ -1,0 +1,8 @@
+/target
+*.log
+*.so
+*.a
+*.out
+.DS_Store
+__pycache__/
+*.pyc
